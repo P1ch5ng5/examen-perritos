@@ -1,13 +1,13 @@
-name: Deploy to AWS ECS
+name: Deploy to AWS ECS (Full Stack)
 
 on:
   push:
     branches:
-      - main  # Se activa cuando guardas cosas en la rama principal
+      - main
 
 jobs:
   deploy:
-    name: Build and Push
+    name: Build, Push and Deploy Stack
     runs-on: ubuntu-latest
 
     steps:
@@ -19,19 +19,69 @@ jobs:
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }} # Clave para AWS Academy
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
         aws-region: us-east-1
 
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
 
-    # Compila el Frontend y lo sube a AWS ECR
-    - name: Build and Push Frontend
+    # ==========================================
+    # 🌐 SECCIÓN 1: DESPLIEGUE DEL FRONTEND
+    # ==========================================
+    - name: Build and Push Frontend Image
+      id: build-frontend
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: perritos-frontend # Cambia esto por el nombre de tu repositorio ECR de Frontend
+        ECR_REPOSITORY: perritos-frontend
         IMAGE_TAG: latest
       run: |
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Fill Frontend Task Definition
+      id: task-frontend
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-frontend.json
+        container-name: frontend-container
+        image: ${{ steps.build-frontend.outputs.image }}
+
+    - name: Deploy Frontend to ECS
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-frontend.outputs.task-definition }}
+        service: perritos-frontend-service
+        cluster: tu-cluster-name  # ⚠️ ¡Cambia esto por el nombre real de tu clúster en AWS!
+        wait-for-service-stability: false
+
+    # ==========================================
+    # 🧠 SECCIÓN 2: DESPLIEGUE DEL BACKEND
+    # ==========================================
+    - name: Build and Push Backend Image
+      id: build-backend
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: perritos-backend
+        IMAGE_TAG: latest
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Fill Backend Task Definition
+      id: task-backend
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-backend.json
+        container-name: backend-container
+        image: ${{ steps.build-backend.outputs.image }}
+
+    - name: Deploy Backend to ECS
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-backend.outputs.task-definition }}
+        service: perritos-backend-service
+        cluster: tu-cluster-name  # ⚠️ ¡Cambia esto por el nombre real de tu clúster en AWS!
+        wait-for-service-stability: false
