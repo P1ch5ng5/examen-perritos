@@ -1,0 +1,30 @@
+{
+  "family": "perritos-backend-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "256",
+  "memory": "512",
+  "containerDefinitions": [
+    {
+      "name": "backend-container",
+      "image": "public.ecr.aws/docker/library/node:18-alpine",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3001,
+          "hostPort": 3001,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "DB_HOST", "value": "18.232.134.109" },
+        { "name": "DB_USER", "value": "alumno" },
+        { "name": "DB_PASSWORD", "value": "alumno123" },
+        { "name": "DB_NAME", "value": "tienda_perritos" },
+        { "name": "PORT", "value": "3001" }
+      ]
+    }
+  ]
+}
